@@ -270,6 +270,14 @@
         </div>
 
         <div class="admin-controls" id="adminControls">
+
+            <!-- 대회 모드 ON/OFF 스위치 -->
+            <div class="admin-row" style="padding-bottom: 8px; border-bottom: 1px dashed #cbd5e1;">
+                <label style="cursor: pointer; color: #2c3e50; font-size: 0.95rem;">
+                    <input type="checkbox" id="contestModeCheck" onchange="toggleContestMode()"> 🏆 <strong>대회 모드 사용 (ON/OFF)</strong>
+                </label>
+            </div>
+
             <!-- 1행: 문제 수 제어 및 초기화 (가운데 정렬) -->
             <div class="admin-row">
                 <label style="color: #2980b9;">
@@ -308,7 +316,7 @@
     </div>
 
     <!-- 4. 진행 현황 표시 -->
-    <div id="progressDisplay" class="progress-display">
+    <div id="progressDisplay" class="progress-display" style="display: none;">
         대회 준비 중 (진행 대기)
     </div>
 
@@ -964,6 +972,26 @@
     document.getElementById('categorySelect').addEventListener('change', updateCounter);
     window.onload = updateCounter;
 
+    // 대회 모드 ON/OFF 전환 함수
+    function toggleContestMode() {
+        const isContestOn = document.getElementById('contestModeCheck').checked;
+        const progressEl = document.getElementById('progressDisplay');
+        const scoreBadge = document.getElementById('scoreBadge');
+
+        if (isContestOn) {
+            progressEl.style.display = 'block';
+            resetContestProgress();
+            alert("🏆 대회 모드가 활성화되었습니다. 설정된 문제 수와 배점에 맞춰 진행됩니다.");
+        } else {
+            progressEl.style.display = 'none';
+            scoreBadge.classList.remove('show');
+            currentQuestionIndex = 0;
+            isBonusRound = false;
+            alert("📖 평상시 자율 암송 모드로 전환되었습니다. 구절이 무제한으로 출제됩니다.");
+        }
+    }
+
+    // 문제 뽑기 함수 (대회 모드 ON/OFF 분기 적용)
     function pickRandomVerse() {
         const list = getSelectedVerses();
         if (list.length === 0) {
@@ -971,43 +999,76 @@
             return;
         }
 
-        const regularLimit = parseInt(document.getElementById('regularLimit').value) || 10;
-        const bonusLimit = parseInt(document.getElementById('bonusLimit').value) || 5;
+        const isContestOn = document.getElementById('contestModeCheck').checked;
         const progressEl = document.getElementById('progressDisplay');
+        const scoreBadge = document.getElementById('scoreBadge');
 
-        // 기본 문제 종료 체크
-        if (!isBonusRound && currentQuestionIndex >= regularLimit) {
-            const startBonus = confirm(
-                `🎉 기본 출제 문제(${regularLimit}문제)가 모두 끝났습니다!\n\n순위 결정을 위한 '보너스 문제'를 출제하시겠습니까?`
-            );
-            if (startBonus) {
-                isBonusRound = true;
-                currentQuestionIndex = 0;
-            } else {
-                alert("대회가 종료되었습니다.");
+        // ==========================================
+        // [1] 대회 모드가 ON일 때만 실행되는 제한 로직
+        // ==========================================
+        if (isContestOn) {
+            const regularLimit = parseInt(document.getElementById('regularLimit').value) || 10;
+            const bonusLimit = parseInt(document.getElementById('bonusLimit').value) || 5;
+
+            // 기본 문제 종료 체크
+            if (!isBonusRound && currentQuestionIndex >= regularLimit) {
+                const startBonus = confirm(
+                    `🎉 기본 출제 문제(${regularLimit}문제)가 모두 끝났습니다!\n\n순위 결정을 위한 '보너스 문제'를 출제하시겠습니까?`
+                );
+                if (startBonus) {
+                    isBonusRound = true;
+                    currentQuestionIndex = 0;
+                } else {
+                    alert("대회가 종료되었습니다.");
+                    return;
+                }
+            }
+
+            // 보너스 문제 종료 체크
+            if (isBonusRound && currentQuestionIndex >= bonusLimit) {
+                alert(`🏁 보너스 문제(${bonusLimit}문제)까지 완료되었습니다.`);
+                progressEl.innerText = "🏆 모든 경기 종료";
+                progressEl.style.color = "#e74c3c";
                 return;
             }
-        }
 
-        // 보너스 문제 종료 체크
-        if (isBonusRound && currentQuestionIndex >= bonusLimit) {
-            alert(`🏁 보너스 문제(${bonusLimit}문제)까지 완료되었습니다.`);
-            progressEl.innerText = "🏆 모든 경기 종료";
-            progressEl.style.color = "#e74c3c";
-            return;
-        }
+            // 번호 증가 및 표시
+            currentQuestionIndex++;
+            if (!isBonusRound) {
+                progressEl.innerText = `[본 대회] 제 ${currentQuestionIndex} / ${regularLimit} 번 문제`;
+                progressEl.style.color = "#2980b9";
+            } else {
+                progressEl.innerText = `🔥 [보너스] 제 ${currentQuestionIndex} / ${bonusLimit} 번 문제`;
+                progressEl.style.color = "#e67e22";
+            }
 
-        // 번호 증가 및 표시
-        currentQuestionIndex++;
-        if (!isBonusRound) {
-            progressEl.innerText = `[본 대회] 제 ${currentQuestionIndex} / ${regularLimit} 번 문제`;
-            progressEl.style.color = "#2980b9";
+            // 배점 계산 (배점 켜기가 되어 있을 때만)
+            const useScore = document.getElementById('useScoreCheck').checked;
+            if (useScore) {
+                const min = parseInt(document.getElementById('minScore').value) || 10;
+                const max = parseInt(document.getElementById('maxScore').value) || 50;
+                const step = parseInt(document.getElementById('stepScore').value) || 10;
+                
+                const stepsCount = Math.floor((max - min) / step);
+                const randomStepIndex = Math.floor(Math.random() * (stepsCount + 1));
+                const calculatedScore = min + (randomStepIndex * step);
+
+                scoreBadge.innerText = `${calculatedScore}점`;
+                scoreBadge.classList.add('show');
+            } else {
+                scoreBadge.classList.remove('show');
+            }
         } else {
-            progressEl.innerText = `🔥 [보너스] 제 ${currentQuestionIndex} / ${bonusLimit} 번 문제`;
-            progressEl.style.color = "#e67e22";
+            // ==========================================
+            // [2] 평상시 자율 암송 모드일 때
+            // ==========================================
+            scoreBadge.classList.remove('show');
+            progressEl.style.display = 'none';
         }
 
-        // 랜덤 문제 추첨
+        // ==========================================
+        // [3] 공통: 랜덤 성경 구절 추첨 및 화면 표시
+        // ==========================================
         const randomIndex = Math.floor(Math.random() * list.length);
         currentVerse = list[randomIndex];
         isRevealed = false;
@@ -1015,26 +1076,7 @@
         const mainDisplay = document.getElementById('mainDisplay');
         const subDisplay = document.getElementById('subDisplay');
         const revealBtn = document.getElementById('revealBtn');
-        const scoreBadge = document.getElementById('scoreBadge');
 
-        // 배점 계산
-        const useScore = document.getElementById('useScoreCheck').checked;
-        if (useScore) {
-            const min = parseInt(document.getElementById('minScore').value) || 10;
-            const max = parseInt(document.getElementById('maxScore').value) || 50;
-            const step = parseInt(document.getElementById('stepScore').value) || 10;
-            
-            const stepsCount = Math.floor((max - min) / step);
-            const randomStepIndex = Math.floor(Math.random() * (stepsCount + 1));
-            const calculatedScore = min + (randomStepIndex * step);
-
-            scoreBadge.innerText = `${calculatedScore}점`;
-            scoreBadge.classList.add('show');
-        } else {
-            scoreBadge.classList.remove('show');
-        }
-
-        // 모드별 화면 출력
         if (currentMode === 'ref') {
             mainDisplay.innerText = `📍 ${currentVerse.ref}\n(${currentVerse.title})`;
             subDisplay.innerText = `"${currentVerse.text}"`;
